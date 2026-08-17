@@ -6,5 +6,5 @@ import react from '@vitejs/plugin-react';
 // cambiá el valor de acá para que coincida exactamente.
 export default defineConfig({
   plugins: [react()],
-  base: '/panel-pacientes/',
+  base: '/lkdfjdslf354980954342klgjfsgl2/',
 });
