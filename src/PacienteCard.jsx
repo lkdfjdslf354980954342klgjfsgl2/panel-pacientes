@@ -1,33 +1,46 @@
 /**
  * PacienteCard.jsx
- * Tarjeta de un paciente. Restaura el comportamiento de la versión HTML:
- * - Modo "individual": dirección/teléfono/mutual/estudios quedan ocultos
- *   detrás de un ícono "i" — al tocarlo aparece una tarjeta flotante.
- * - Modo "todos": esos mismos datos se muestran siempre expandidos en la
- *   propia tarjeta (sin necesidad de tocar nada).
- * Memoizada para que reordenar o editar un paciente no vuelva a dibujar
- * el resto de la lista (rendimiento en Android gama media).
+ * Tarjeta de paciente con dos modos:
+ * - individual: datos ocultos tras botón "i" (flotante)
+ * - todos: todos los datos expandidos en la tarjeta
  */
 import { memo, useState, useRef, useEffect } from 'react';
 
+/**
+ * Formatea fecha ISO a dd/mm/yyyy
+ */
 function formatFecha(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
   return d && m && y ? `${d}/${m}/${y}` : iso;
 }
 
-/** Color determinístico y prolijo por número de posición. */
+/**
+ * Color determinístico según posición
+ */
 function posColor(n) {
+  if (!n) return '#999';
   const hue = (n * 47) % 360;
   return `hsl(${hue}, 68%, 46%)`;
 }
 
+/**
+ * Abre ficha del paciente en nueva ventana para imprimir
+ */
 function imprimirFicha(paciente) {
   const ventana = window.open('', '_blank', 'width=600,height=800');
   if (!ventana) {
-    alert('El navegador bloqueó la ventana de impresión. Permití pop-ups para este sitio.');
+    alert('El navegador bloqueó la ventana. Habilitá pop-ups para este sitio.');
     return;
   }
+
+  const estudiosHTML =
+    paciente.estudios && paciente.estudios.length
+      ? `<div class="fila"><span class="etiqueta">Estudios</span>${paciente.estudios
+          .map((e) => e.n + (e.estado === 'pendiente' ? ' (pend.)' : ''))
+          .join(', ')}</div>`
+      : '';
+
   ventana.document.write(`
     <!DOCTYPE html>
     <html lang="es">
@@ -51,13 +64,7 @@ function imprimirFicha(paciente) {
         <div class="fila"><span class="etiqueta">Mutual</span>${paciente.mutual || '-'}</div>
         <div class="fila"><span class="etiqueta">Fecha de visita</span>${formatFecha(paciente.fecha_visita) || '-'}</div>
         ${paciente.dni ? `<div class="fila"><span class="etiqueta">DNI</span>${paciente.dni}</div>` : ''}
-        ${
-          paciente.estudios?.length
-            ? `<div class="fila"><span class="etiqueta">Estudios</span>${paciente.estudios
-                .map((e) => e.n + (e.estado === 'pendiente' ? ' (pend.)' : ''))
-                .join(', ')}</div>`
-            : ''
-        }
+        ${estudiosHTML}
       </body>
     </html>
   `);
@@ -66,37 +73,74 @@ function imprimirFicha(paciente) {
   setTimeout(() => ventana.print(), 150);
 }
 
+/**
+ * Pills de estudios/órdenes
+ */
 function EstudioPills({ estudios }) {
-  if (!estudios?.length) return <span className="text-slate-400">—</span>;
-  return estudios.map((e, i) => (
-    <span
-      key={i}
-      className={`inline-block text-[11px] px-2 py-0.5 rounded-full mr-1 mb-1 ${
-        e.estado === 'pendiente' ? 'bg-coral-tint text-coral' : 'bg-teal-tint text-teal'
-      }`}
-    >
-      {e.n}
-    </span>
-  ));
+  if (!estudios || estudios.length === 0) {
+    return <span style={{ color: '#999' }}>—</span>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+      {estudios.map((e, i) => (
+        <span
+          key={i}
+          style={{
+            display: 'inline-block',
+            fontSize: '11px',
+            padding: '4px 8px',
+            borderRadius: '12px',
+            background: e.estado === 'pendiente' ? '#FBEAE2' : '#E6EFEC',
+            color: e.estado === 'pendiente' ? '#D9714B' : '#4C7A72',
+            fontWeight: '500',
+          }}
+        >
+          {e.n}
+        </span>
+      ))}
+    </div>
+  );
 }
 
+/**
+ * Contenido expandido (vista "todos")
+ */
 function DetalleContenido({ paciente }) {
   return (
-    <div className="mt-2 pt-2 border-t border-dashed border-stone-200 grid grid-cols-2 gap-2 text-sm">
+    <div
+      style={{
+        marginTop: '12px',
+        paddingTop: '12px',
+        borderTop: '1px dashed #ddd',
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '12px',
+        fontSize: '13px',
+      }}
+    >
       <div>
-        <span className="block text-[10.5px] font-mono uppercase text-rose">Dirección</span>
+        <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#B7405E', marginBottom: '4px' }}>
+          DIRECCIÓN
+        </div>
         {paciente.direccion || '—'}
       </div>
       <div>
-        <span className="block text-[10.5px] font-mono uppercase text-rose">Teléfono</span>
+        <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#B7405E', marginBottom: '4px' }}>
+          TELÉFONO
+        </div>
         {paciente.telefono || '—'}
       </div>
       <div>
-        <span className="block text-[10.5px] font-mono uppercase text-rose">Mutual</span>
+        <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#B7405E', marginBottom: '4px' }}>
+          MUTUAL
+        </div>
         {paciente.mutual || '—'}
       </div>
-      <div className="col-span-2">
-        <span className="block text-[10.5px] font-mono uppercase text-teal">Estudios</span>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#4C7A72', marginBottom: '4px' }}>
+          ESTUDIOS
+        </div>
         <EstudioPills estudios={paciente.estudios} />
       </div>
     </div>
@@ -104,49 +148,119 @@ function DetalleContenido({ paciente }) {
 }
 
 /**
- * @param {{
- *   paciente: import('./usePacientes').Paciente,
- *   vista: 'individual' | 'todos',
- *   reorderEnabled: boolean,
- *   isSelected: boolean,
- *   isDragging: boolean,
- *   onEdit: (p: import('./usePacientes').Paciente) => void,
- *   onDelete: (id: string) => void,
- *   onToggleRoute: (id: string) => void,
- *   onDragStart: (id: string) => void,
- * }} props
+ * Botón de información flotante
+ */
+function BtnInfo({ paciente, abierto, btnRef, onAbrir, pos, cardRef }) {
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={onAbrir}
+        aria-label="Ver datos"
+        style={{
+          width: '32px',
+          height: '32px',
+          borderRadius: '8px',
+          border: abierto ? '2px solid #B7405E' : '1px solid #ddd',
+          background: abierto ? '#F4E3E8' : 'white',
+          color: abierto ? '#B7405E' : '#999',
+          cursor: 'pointer',
+          fontWeight: 'bold',
+          fontSize: '16px',
+          transition: 'all 0.2s',
+        }}
+      >
+        ⓘ
+      </button>
+
+      {abierto && (
+        <div
+          style={{
+            position: 'fixed',
+            width: '260px',
+            background: 'white',
+            border: '1px solid #ddd',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            padding: '12px',
+            zIndex: 250,
+            top: pos.top,
+            left: pos.left,
+            fontSize: '13px',
+          }}
+        >
+          <h4 style={{ margin: '0 0 8px 0', fontWeight: 'bold', fontSize: '14px' }}>
+            {paciente.nombre}
+          </h4>
+          <div style={{ marginBottom: '6px' }}>
+            <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#B7405E' }}>DIRECCIÓN</div>
+            {paciente.direccion || '—'}
+          </div>
+          <div style={{ marginBottom: '6px' }}>
+            <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#B7405E' }}>TELÉFONO</div>
+            {paciente.telefono || '—'}
+          </div>
+          <div style={{ marginBottom: '6px' }}>
+            <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#B7405E' }}>MUTUAL</div>
+            {paciente.mutual || '—'}
+          </div>
+          <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #ddd' }}>
+            <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#4C7A72', marginBottom: '4px' }}>
+              ESTUDIOS
+            </div>
+            <EstudioPills estudios={paciente.estudios} />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * Componente PacienteCard - memoizado para optimizar renders
  */
 function PacienteCard({
   paciente,
-  vista,
-  reorderEnabled,
-  isSelected,
-  isDragging,
-  onEdit,
-  onDelete,
-  onToggleRoute,
-  onDragStart,
+  vista = 'individual',
+  reorderEnabled = false,
+  isSelected = false,
+  isDragging = false,
+  onEdit = () => {},
+  onDelete = () => {},
+  onToggleRoute = () => {},
+  onDragStart = () => {},
 }) {
   const [abierto, setAbierto] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const btnRef = useRef(null);
   const cardRef = useRef(null);
 
+  // Cierra el flotante cuando se hace click afuera
   useEffect(() => {
     if (!abierto) return;
-    function onFuera(e) {
-      if (cardRef.current && !cardRef.current.contains(e.target)) setAbierto(false);
+
+    function handleClickAfuera(e) {
+      if (cardRef.current && !cardRef.current.contains(e.target)) {
+        setAbierto(false);
+      }
     }
-    document.addEventListener('pointerdown', onFuera);
-    return () => document.removeEventListener('pointerdown', onFuera);
+
+    document.addEventListener('pointerdown', handleClickAfuera);
+    return () => document.removeEventListener('pointerdown', handleClickAfuera);
   }, [abierto]);
 
   const abrirFlotante = () => {
+    if (!btnRef.current) return;
+
     const rect = btnRef.current.getBoundingClientRect();
-    let left = rect.left - 230;
-    let top = rect.bottom + 6;
-    if (left < 8) left = Math.min(rect.right + 8, window.innerWidth - 260);
+    let left = rect.left - 260;
+    let top = rect.bottom + 8;
+
+    // Ajusta posición si se sale de pantalla
+    if (left < 8) left = Math.min(rect.right + 8, window.innerWidth - 268);
     if (top + 200 > window.innerHeight) top = window.innerHeight - 210;
+
     setPos({ top, left });
     setAbierto(true);
   };
@@ -154,114 +268,181 @@ function PacienteCard({
   return (
     <div
       ref={cardRef}
-      className={`relative bg-white rounded-xl border border-stone-200 shadow-sm p-3 flex gap-3 items-start transition ${
-        isDragging ? 'opacity-40 bg-rose-tint' : ''
-      }`}
+      style={{
+        position: 'relative',
+        background: 'white',
+        borderRadius: '12px',
+        border: '1px solid #ddd',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+        padding: '12px',
+        display: 'flex',
+        gap: '12px',
+        alignItems: 'flex-start',
+        transition: 'all 0.2s',
+        opacity: isDragging ? 0.4 : 1,
+        background: isDragging ? '#F4E3E8' : 'white',
+      }}
     >
+      {/* Botón de reordenamiento */}
       <button
         type="button"
         onPointerDown={() => reorderEnabled && onDragStart(paciente.id)}
         title={reorderEnabled ? 'Arrastrá para reordenar' : 'Limpiá filtros para reordenar'}
-        className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-white font-mono font-bold text-xs shadow ${
-          reorderEnabled ? 'cursor-grab active:cursor-grabbing' : 'opacity-40 cursor-not-allowed'
-        }`}
-        style={{ backgroundColor: posColor(paciente.posicion) }}
+        style={{
+          flexShrink: 0,
+          width: '36px',
+          height: '36px',
+          borderRadius: '50%',
+          border: 'none',
+          background: posColor(paciente.posicion),
+          color: 'white',
+          fontWeight: 'bold',
+          fontSize: '12px',
+          cursor: reorderEnabled ? 'grab' : 'not-allowed',
+          opacity: reorderEnabled ? 1 : 0.5,
+          transition: 'all 0.2s',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
       >
         {paciente.posicion}
       </button>
 
+      {/* Checkbox de ruta */}
       <input
         type="checkbox"
         checked={isSelected}
         onChange={() => onToggleRoute(paciente.id)}
-        className="mt-2 shrink-0 accent-teal w-4 h-4"
         title="Incluir en el recorrido"
+        style={{
+          marginTop: '6px',
+          width: '16px',
+          height: '16px',
+          cursor: 'pointer',
+          accentColor: '#4C7A72',
+        }}
       />
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="font-semibold text-slate-800 text-sm truncate">{paciente.nombre}</h3>
-            <p className="text-xs text-slate-500 font-mono">
+      {/* Contenido principal */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'flex-start' }}>
+          <div style={{ minWidth: 0 }}>
+            <h3
+              style={{
+                margin: '0 0 4px 0',
+                fontWeight: 'bold',
+                fontSize: '14px',
+                color: '#1C2B39',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {paciente.nombre}
+            </h3>
+            <p style={{ margin: 0, fontSize: '12px', color: '#999', fontFamily: 'monospace' }}>
               {formatFecha(paciente.fecha_visita)}
               {paciente.turno && ` · ${paciente.turno}`}
-              {paciente.edad !== '' && paciente.edad != null && ` · ${paciente.edad} años`}
+              {paciente.edad && paciente.edad !== '' ? ` · ${paciente.edad} años` : ''}
             </p>
           </div>
-          <div className="flex gap-1 shrink-0">
+
+          {/* Botones de acciones */}
+          <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
             {vista === 'individual' && (
-              <button
-                ref={btnRef}
-                type="button"
-                onClick={abrirFlotante}
-                aria-label="Ver datos"
-                className={`w-8 h-8 rounded-lg border flex items-center justify-center transition ${
-                  abierto ? 'bg-rose border-rose text-white' : 'border-stone-200 text-slate-500 hover:border-rose hover:text-rose'
-                }`}
-              >
-                ⓘ
-              </button>
+              <BtnInfo
+                paciente={paciente}
+                abierto={abierto}
+                btnRef={btnRef}
+                onAbrir={abrirFlotante}
+                pos={pos}
+                cardRef={cardRef}
+              />
             )}
+
             <button
               type="button"
               onClick={() => onEdit(paciente)}
-              aria-label="Editar paciente"
-              className="w-8 h-8 rounded-lg border border-stone-200 text-slate-500 hover:border-rose hover:text-rose flex items-center justify-center transition"
+              title="Editar"
+              style={{
+                width: '32px',
+                height: '32px',
+                border: '1px solid #ddd',
+                borderRadius: '8px',
+                background: 'white',
+                cursor: 'pointer',
+                fontSize: '16px',
+                transition: 'all 0.2s',
+                color: '#999',
+              }}
             >
               ✎
             </button>
+
             <button
               type="button"
               onClick={() => onDelete(paciente.id)}
-              aria-label="Eliminar paciente"
-              className="w-8 h-8 rounded-lg border border-stone-200 text-slate-500 hover:border-rose hover:text-rose flex items-center justify-center transition"
+              title="Eliminar"
+              style={{
+                width: '32px',
+                height: '32px',
+                border: '1px solid #ddd',
+                borderRadius: '8px',
+                background: 'white',
+                cursor: 'pointer',
+                fontSize: '16px',
+                transition: 'all 0.2s',
+                color: '#999',
+              }}
             >
-              🗑
+              🗑️
             </button>
           </div>
         </div>
 
+        {/* Mutual */}
         {paciente.mutual && (
-          <span className="inline-block mt-1 text-[11px] font-mono px-2 py-0.5 rounded-full bg-teal-tint text-teal">
+          <div
+            style={{
+              marginTop: '8px',
+              display: 'inline-block',
+              fontSize: '11px',
+              fontFamily: 'monospace',
+              padding: '4px 8px',
+              borderRadius: '6px',
+              background: '#E6EFEC',
+              color: '#4C7A72',
+            }}
+          >
             {paciente.mutual}
-          </span>
+          </div>
         )}
 
+        {/* Detalles en vista "todos" */}
         {vista === 'todos' && <DetalleContenido paciente={paciente} />}
 
+        {/* Botón imprimir */}
         <button
           type="button"
           onClick={() => imprimirFicha(paciente)}
-          className="mt-2 block text-xs font-semibold px-3 py-1.5 rounded-lg bg-ink text-white active:scale-95 transition"
+          style={{
+            marginTop: '10px',
+            display: 'block',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            background: '#1C2B39',
+            color: 'white',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+          }}
         >
-          Imprimir Ficha A4
+          🖨️ Imprimir Ficha A4
         </button>
       </div>
-
-      {vista === 'individual' && abierto && (
-        <div
-          className="fixed w-64 bg-white border border-stone-200 rounded-xl shadow-lg p-4 z-[250] text-sm"
-          style={{ top: pos.top, left: pos.left }}
-        >
-          <h4 className="font-bold text-sm mb-2">{paciente.nombre}</h4>
-          <p className="mb-1">
-            <span className="block text-[10.5px] font-mono uppercase text-rose">Dirección</span>
-            {paciente.direccion || '—'}
-          </p>
-          <p className="mb-1">
-            <span className="block text-[10.5px] font-mono uppercase text-rose">Teléfono</span>
-            {paciente.telefono || '—'}
-          </p>
-          <p className="mb-1">
-            <span className="block text-[10.5px] font-mono uppercase text-rose">Mutual</span>
-            {paciente.mutual || '—'}
-          </p>
-          <div className="mt-2 pt-2 border-t border-dashed border-stone-200">
-            <span className="block text-[10.5px] font-mono uppercase text-teal mb-1">Estudios</span>
-            <EstudioPills estudios={paciente.estudios} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
